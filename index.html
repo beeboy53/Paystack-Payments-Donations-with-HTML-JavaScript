@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Paystack Demo — Product & Donation</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding: 24px; max-width: 720px; margin:auto; }
+    .card { border:1px solid #e6e6e6; padding:16px; border-radius:8px; margin-bottom:16px; }
+    label { display:block; margin-top:8px; font-weight:600; }
+    input[type="text"], input[type="email"], input[type="number"] { width:100%; padding:8px; margin-top:6px; box-sizing:border-box; }
+    button { margin-top:12px; padding:10px 14px; border-radius:6px; cursor:pointer; }
+    .muted { color:#666; font-size:0.9em; }
+  </style>
+</head>
+<body>
+
+  <h1>Paystack Demo — Product & Donation</h1>
+  <p class="muted">Use Paystack test public key: <code>pk_test_xxxxx</code> when testing.</p>
+
+  <div class="card" id="productCard">
+    <h2>Buy Product — T‑Shirt (₦2,500)</h2>
+    <label for="buyerEmail">Your email</label>
+    <input id="buyerEmail" type="email" placeholder="you@example.com" />
+
+    <button id="buyBtn">Buy Now (₦2,500)</button>
+  </div>
+
+  <div class="card" id="donationCard">
+    <h2>Donate (enter any amount)</h2>
+    <label for="donorEmail">Your email</label>
+    <input id="donorEmail" type="email" placeholder="you@example.com" />
+    <label for="donationAmount">Amount (NGN)</label>
+    <input id="donationAmount" type="number" min="1" placeholder="e.g. 1500" />
+    <button id="donateBtn">Donate</button>
+  </div>
+
+  <div class="card">
+    <h3>Optional: Webhook logging (for records)</h3>
+    <p class="muted">If you want to keep a simple log of successful payments, create a free webhook URL at <a href="https://webhook.site" target="_blank">webhook.site</a> and paste it below:</p>
+    <input id="webhookUrl" type="text" placeholder="https://webhook.site/your-unique-id" />
+    <p class="muted">After successful payment the demo will POST the payment reference to this URL (so you can view it in webhook.site).</p>
+  </div>
+
+  <!-- Include Paystack inline script -->
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+  <script>
+    const PAYSTACK_PUBLIC_KEY = 'pk_test_xxxxxxxxxxxxxxxxxxxxx';
+    const PRODUCT_PRICE_NGN = 2500;
+
+    function payWithPaystack({email, amountNgn, reference, onSuccess, onClose}) {
+      const amountKobo = Math.round(amountNgn * 100);
+      const handler = PaystackPop.setup({
+        key: PAYSTACK_PUBLIC_KEY,
+        email: email,
+        amount: amountKobo,
+        reference: reference || 'ref_' + Date.now(),
+        onClose: function() { if(onClose) onClose(); },
+        callback: function(response) {
+          if(onSuccess) onSuccess(response);
+        }
+      });
+      handler.openIframe();
+    }
+
+    document.getElementById('buyBtn').addEventListener('click', function() {
+      const email = document.getElementById('buyerEmail').value.trim();
+      if(!email) return alert('Please enter your email');
+      payWithPaystack({
+        email: email,
+        amountNgn: PRODUCT_PRICE_NGN,
+        onSuccess: function(resp) {
+          alert('Payment completed. Reference: ' + resp.reference);
+          postToWebhookIfSet({reference: resp.reference, email, amount: PRODUCT_PRICE_NGN});
+        }
+      });
+    });
+
+    document.getElementById('donateBtn').addEventListener('click', function() {
+      const email = document.getElementById('donorEmail').value.trim();
+      const amount = Number(document.getElementById('donationAmount').value);
+      if(!email) return alert('Please enter your email');
+      if(!amount || amount <= 0) return alert('Please enter a valid donation amount (NGN)');
+      payWithPaystack({
+        email: email,
+        amountNgn: amount,
+        onSuccess: function(resp) {
+          alert('Thank you! Donation complete. Reference: ' + resp.reference);
+          postToWebhookIfSet({reference: resp.reference, email, amount});
+        }
+      });
+    });
+
+    function postToWebhookIfSet(payload) {
+      const url = document.getElementById('webhookUrl').value.trim();
+      if(!url) return;
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: 'paystack.success', data: payload, timestamp: new Date().toISOString() })
+      }).catch(err => console.warn('Webhook POST failed', err));
+    }
+  </script>
+</body>
+</html>
